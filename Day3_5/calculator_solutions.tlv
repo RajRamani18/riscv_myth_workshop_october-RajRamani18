@@ -27,7 +27,17 @@
             $quot[31:0] = $val1[31:0] / $val2[31:0];
 
          @2
-            $out[31:0] = $op[1] ? ($op[0] ? $quot[31:0] : $prod[31:0]) : ($op[0] ? $diff[31:0] : $sum[31:0]); 
+            $out[31:0] = $reset ? 32'b0 :
+                         ($op[2:0] == 3'b000) ? $sum[31:0] :
+                         ($op[2:0] == 3'b001) ? $diff[31:0] :
+                         ($op[2:0] == 3'b010) ? $prod[31:0] :
+                         ($op[2:0] == 3'b011) ? $quot[31:0] :
+                         ($op[2:0] == 3'b100) ? >>2$mem[31:0] : $out[31:0];
+            
+            $mem[31:0] = $reset ? 32'b0 :
+                         ($op[2:0] == 3'b101) ? >>2$mem[31:0] :
+                         ($op[2:0] == 3'b110) ? >>2$out[31:0] : $mem[31:0];
+            
    //
 
    // Assert these to end simulation (before Makerchip cycle limit).
