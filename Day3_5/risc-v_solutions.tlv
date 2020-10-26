@@ -42,13 +42,12 @@
          $reset = *reset;
          
          //valid
-         $start = >>1$reset && ~$reset;
-         $valid = $reset ? 1'b0 : $start ? 1'b1 : >>3$valid;
+         //$start = >>1$reset && ~$reset;
+         //$valid = $reset ? 1'b0 : $start ? 1'b1 : >>3$valid;
          
-         //PC
-         //$pc[31:0] = (>>1$reset) ? 0: >>1$pc + 32'd4;
+         //PC         
          $pc[31:0] = (>>1$reset) ? 32'b0 :
-                     (>>3$valid_taken_br) ? >>3$br_tgt_pc : >>3$inc_pc;
+                     (>>3$valid_taken_br) ? >>3$br_tgt_pc : >>1$inc_pc;
          
          //Fetch
          $imem_rd_en = ~($reset);
@@ -76,7 +75,7 @@
          
          $is_u_instr = $instr[6:2] ==? 5'b0x101;
          
-         //based on instr type form imm
+         //based on instr type, form imm
          $imm[31:0] = $is_i_instr ? {{21{$instr[31]}}, $instr[30:20] } :
                       $is_s_instr ? {{21{$instr[31]}}, $instr[30:25], $instr[11:7] } :
                       $is_b_instr ? {{20{$instr[31]}}, $instr[7], $instr[30:25], $instr[11:8], 1'b0 } :
@@ -104,15 +103,50 @@
          
          //Instr Decode
          $dec_bits[10:0] = {$funct7[5], $funct3, $opcode};
+         
+         //Branch
          $is_beq = $dec_bits ==? 11'bx_000_1100011;
          $is_bne = $dec_bits ==? 11'bx_001_1100011;
          $is_blt = $dec_bits ==? 11'bx_100_1100011;
          $is_bge = $dec_bits ==? 11'bx_101_1100011;
          $is_bltu = $dec_bits ==? 11'bx_110_1100011;
          $is_bgeu = $dec_bits ==? 11'bx_111_1100011;
+         
+         //Arithmetic
          $is_add = $dec_bits ==? 11'b0_000_0110011;
          $is_addi = $dec_bits ==? 11'bx_000_0010011;
-      
+         $is_or = $dec_bits ==? 11'b0_110_0110011;
+         $is_ori = $dec_bits ==? 11'bx_110_0010011;
+         $is_xor = $dec_bits ==? 11'b0_100_0110011;
+         $is_xori = $dec_bits ==? 11'bx_100_0010011;
+         $is_and = $dec_bits ==? 11'b0_111_0110011;
+         $is_andi = $dec_bits ==? 11'bx_111_0010011;
+         $is_sub = $dec_bits ==? 11'b1_000_0110011;
+         $is_slti = $dec_bits ==? 11'bx_010_0010011;
+         $is_sltiu = $dec_bits ==? 11'bx_011_0010011;
+         $is_slli = $dec_bits ==? 11'b0_001_0010011;
+         $is_srli = $dec_bits ==? 11'b0_101_0010011;
+         $is_srai = $dec_bits ==? 11'b1_101_0010011;
+         $is_sll = $dec_bits ==? 11'b0_001_0110011;
+         $is_slt = $dec_bits ==? 11'b0_010_0110011;
+         $is_sltu = $dec_bits ==? 11'b0_011_0110011;
+         $is_srl = $dec_bits ==? 11'b0_101_0110011;
+         $is_sra = $dec_bits ==? 11'b1_101_0110011;
+         
+         //Load
+         $is_load = $dec_bits ==? 11'bx_xxx_0000011;
+         
+         //Store
+         $is_sb = $dec_bits ==? 11'bx_000_0100011;
+         $is_sh = $dec_bits ==? 11'bx_001_0100011;
+         $is_sw = $dec_bits ==? 11'bx_010_0100011;
+         
+         //Jump
+         $lui = $dec_bits ==? 11'bx_xxx_0110111;
+         $auipc = $dec_bits ==? 11'bx_xxx_0010111;
+         $jal = $dec_bits ==? 11'bx_xxx_1101111;
+         $jalr = $dec_bits ==? 11'bx_000_1100111;
+         
       @2
          //Reg File Read
          $rf_rd_en1 = $rs1_valid;
@@ -132,8 +166,32 @@
       
       @3
          //ALU
+         $sltu_result = $src1_value < $src2_value ;
+         $sltiu_result = $src1_value < $imm ;
+         
          $result[31:0] = $is_addi ? ($src1_value + $imm) :
-                         $is_add ? ($src1_value + $src2_value) : 32'bx;
+                         $is_add ? ($src1_value + $src2_value) :
+                         $is_or ? $src1_value | $src2_value :
+                         $is_ori ? $src1_value | $imm :
+                         $is_xor ? $src1_value ^ $src2_value :
+                         $is_xori ? $src1_value ^ $imm :
+                         $is_and ? $src1_value & $src2_value :
+                         $is_andi ? $src1_value & $imm :
+                         $is_sub ? $src1_value - $src2_value :
+                         $is_slti ? (($src1_value[31] == $imm[31]) ? $sltiu_result : {31'b0,$src1_value[31]}) :
+                         $is_sltiu ? $sltiu_result :
+                         $is_slli ? $src1_value << $imm[5:0] :
+                         $is_srli ? $src1_value >> $imm[5:0] :
+                         $is_srai ? ({{32{$src1_value[31]}}, $src1_value} >> $imm[4:0]) :
+                         $is_sll ? $src1_value << $src2_value[4:0] :
+                         $is_slt ? (($src1_value[31] == $src2_value[31]) ? $sltu_result : {31'b0,$src1_value[31]}) :
+                         $is_sltu ? $sltu_result :
+                         $is_srl ? $src1_value >> $src2_value[5:0] :
+                         $is_sra ? ({{32{$src1_value[31]}}, $src1_value} >> $src2_value[4:0]) :
+                         $lui ? ({$imm[31:12], 12'b0}) :
+                         $auipc ? $pc + $imm :
+                         $jal ? $pc + 4 :
+                         $jalr ? $pc + 4 : 32'bx;
          
          //Reg File Write
          $rf_wr_en = $valid ? (($rd == 5'b0) ? 1'b0 : $rd_valid) : 1'b0;
@@ -150,6 +208,7 @@
                      $is_bgeu ? ($src1_value >= $src2_value) : 1'b0;
          
          $valid_taken_br = $valid && $taken_br;
+         $valid = ~(>>1$valid_taken_br || >>2$valid_taken_br);
          
          //$br_tgt_pc[31:0] = $pc + $imm;
          
