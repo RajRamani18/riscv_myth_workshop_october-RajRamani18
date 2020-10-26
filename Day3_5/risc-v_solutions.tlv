@@ -41,9 +41,14 @@
       @0
          $reset = *reset;
          
+         //valid
+         $start = >>1$reset && ~$reset;
+         $valid = $reset ? 1'b0 : $start ? 1'b1 : >>3$valid;
+         
          //PC
          //$pc[31:0] = (>>1$reset) ? 0: >>1$pc + 32'd4;
-         $pc[31:0] = (>>1$reset) ? 32'b0 : (>>1$taken_br) ? >>1$br_tgt_pc : >>1$pc + 32'd4;
+         $pc[31:0] = (>>1$reset) ? 32'b0 :
+                     (>>3$valid_taken_br) ? >>3$br_tgt_pc : >>3$inc_pc;
          
          //Fetch
          $imem_rd_en = ~($reset);
@@ -51,6 +56,7 @@
       
       @1
          $instr[31:0] = $imem_rd_data[31:0];
+         $inc_pc[31:0] = $pc + 32'd4;
          
          //Instr type decode - IRSBJU
          $is_i_instr = $instr[6:2] ==? 5'b0000x || 
@@ -75,7 +81,7 @@
                       $is_s_instr ? {{21{$instr[31]}}, $instr[30:25], $instr[11:7] } :
                       $is_b_instr ? {{20{$instr[31]}}, $instr[7], $instr[30:25], $instr[11:8], 1'b0 } :
                       $is_u_instr ? {$instr[31:12], 12'b0} :
-                      $is_u_instr ? {{12{$instr[31]}}, $instr[19:12], $instr[20], $instr[30:21], 1'b0} : 32'b0;
+                      $is_j_instr ? {{12{$instr[31]}}, $instr[19:12], $instr[20], $instr[30:21], 1'b0} : 32'b0;
          
          $funct7_valid = $is_r_instr;
          $funct3_valid = $is_r_instr || $is_i_instr || $is_s_instr || $is_b_instr;
@@ -106,24 +112,31 @@
          $is_bgeu = $dec_bits ==? 11'bx_111_1100011;
          $is_add = $dec_bits ==? 11'b0_000_0110011;
          $is_addi = $dec_bits ==? 11'bx_000_0010011;
-         
+      
+      @2
          //Reg File Read
-         ?$rs1_valid
-            $rf_rd_en1 = $rs1_valid;
+         $rf_rd_en1 = $rs1_valid;
+         ?$rf_rd_en1
             $rf_rd_index1[4:0] = $rs1[4:0];
-         ?$rs2_valid
-            $rf_rd_en2 = $rs2_valid;
+         
+         $rf_rd_en2 = $rs2_valid;
+         ?$rf_rd_en2
             $rf_rd_index2[4:0] = $rs2[4:0];
          
-         $src1_value[31:0] = $rf_rd_data1[31:0];
-         $src2_value[31:0] = $rf_rd_data2[31:0];
+         //Branch Target PC
+         $br_tgt_pc[31:0] = $pc + $imm;
          
+         //i/p to ALU
+         $src1_value[31:0] = ((>>1$rd == $rs1) && >>1$rf_wr_en) ? >>1$result : $rf_rd_data1[31:0];
+         $src2_value[31:0] = ((>>1$rd == $rs2) && >>1$rf_wr_en) ? >>1$result : $rf_rd_data2[31:0];
+      
+      @3
          //ALU
          $result[31:0] = $is_addi ? ($src1_value + $imm) :
                          $is_add ? ($src1_value + $src2_value) : 32'bx;
          
          //Reg File Write
-         $rf_wr_en = ($rd == 5'b0) ? 1'b0 : $rd_valid;
+         $rf_wr_en = $valid ? (($rd == 5'b0) ? 1'b0 : $rd_valid) : 1'b0;
          ?$rf_wr_en
             $rf_wr_index[4:0] = $rd[4:0];
             $rf_wr_data[31:0] = $result[31:0];
@@ -136,7 +149,9 @@
                      $is_bltu ? ($src1_value < $src2_value) :
                      $is_bgeu ? ($src1_value >= $src2_value) : 1'b0;
          
-         $br_tgt_pc[31:0] = $pc + $imm;
+         $valid_taken_br = $valid && $taken_br;
+         
+         //$br_tgt_pc[31:0] = $pc + $imm;
          
          `BOGUS_USE($is_beq $is_bne $is_blt $is_bge $is_bltu $is_bgeu $is_add $is_addi)
       // Note: Because of the magic we are using for visualisation, if visualisation is enabled below,
@@ -145,7 +160,8 @@
  
    
    // Assert these to end simulation (before Makerchip cycle limit).
-   *passed = *cyc_cnt > 40;
+   *passed = |cpu/xreg[10]>>5$value == (1+2+3+4+5+6+7+8+9);
+   //*passed = *cyc_cnt > 40;
    *failed = 1'b0;
    
    // Macro instantiations for:
@@ -155,7 +171,7 @@
    //  o CPU visualization
    |cpu
       m4+imem(@1)    // Args: (read stage)
-      m4+rf(@1, @1)  // Args: (read stage, write stage) - if equal, no register bypass is required
+      m4+rf(@2, @3)  // Args: (read stage, write stage) - if equal, no register bypass is required
       //m4+dmem(@4)    // Args: (read/write stage)
    
    m4+cpu_viz(@4)    // For visualisation, argument should be at least equal to the last stage of CPU logic
