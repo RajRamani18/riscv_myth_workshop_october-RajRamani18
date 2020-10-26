@@ -42,7 +42,8 @@
          $reset = *reset;
          
          //PC
-         $pc[31:0] = (>>1$reset) ? 0: >>1$pc + 32'd4;
+         //$pc[31:0] = (>>1$reset) ? 0: >>1$pc + 32'd4;
+         $pc[31:0] = (>>1$reset) ? 32'b0 : (>>1$taken_br) ? >>1$br_tgt_pc : >>1$pc + 32'd4;
          
          //Fetch
          $imem_rd_en = ~($reset);
@@ -126,6 +127,16 @@
          ?$rf_wr_en
             $rf_wr_index[4:0] = $rd[4:0];
             $rf_wr_data[31:0] = $result[31:0];
+         
+         //Branch
+         $taken_br = $is_beq ? ($src1_value == $src2_value) :
+                     $is_bne ? ($src1_value != $src2_value) :
+                     $is_blt ? (($src1_value < $src2_value) ^ ($src1_value[31] != $src2_value[31])) :
+                     $is_bge ? (($src1_value >= $src2_value) ^ ($src1_value[31] != $src2_value[31])) :
+                     $is_bltu ? ($src1_value < $src2_value) :
+                     $is_bgeu ? ($src1_value >= $src2_value) : 1'b0;
+         
+         $br_tgt_pc[31:0] = $pc + $imm;
          
          `BOGUS_USE($is_beq $is_bne $is_blt $is_bge $is_bltu $is_bgeu $is_add $is_addi)
       // Note: Because of the magic we are using for visualisation, if visualisation is enabled below,
