@@ -106,7 +106,7 @@
          $is_add = $dec_bits ==? 11'b0_000_0110011;
          $is_addi = $dec_bits ==? 11'bx_000_0010011;
          
-         `BOGUS_USE($is_beq $is_bne $is_blt $is_bge $is_bltu $is_bgeu $is_add $is_addi)
+         
          
          //Reg File Read
          ?$rs1_valid
@@ -118,6 +118,13 @@
          
          $src1_value[31:0] = $rf_rd_data1[31:0];
          $src2_value[31:0] = $rf_rd_data2[31:0];
+         
+         //ALU
+         $result[31:0] = $is_addi ? ($src1_value + $imm) :
+                         $is_add ? ($src1_value + $src2_value) : 32'bx;
+         
+         
+         `BOGUS_USE($is_beq $is_bne $is_blt $is_bge $is_bltu $is_bgeu $is_add $is_addi)
       // Note: Because of the magic we are using for visualisation, if visualisation is enabled below,
       //       be sure to avoid having unassigned signals (which you might be using for random inputs)
       //       other than those specifically expected in the labs. You'll get strange errors for these.
