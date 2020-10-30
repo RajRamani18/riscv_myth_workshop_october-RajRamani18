@@ -4,9 +4,9 @@ This repository describes information needed to build pipelined RISC-V core. Thi
 
 # Table of Contents
 
--[Introduction to RISC-V ISA] (###Introduction%20%to%20%RISC-V%20%ISA)
+- [Introduction to RISC-V ISA](RISC-V%20%Core%20%(RV32I)#Introduction%20%to%20%RISC-V%20%ISA)
 
-###Introduction%20%to%20%RISC-V%20%ISA
+# Introduction to RISC-V ISA
 
 A RISC-V Instruction Set Architecture (ISA) is defined as a base integer ISA, which must be present in any implementation, plus optional extensions to the base ISA. Each base integer instruction set is characterized by
 
